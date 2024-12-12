@@ -226,10 +226,10 @@
         }
     </style>
     <!-- 引入 Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <script>
-        // 使用你的Firebase專案設定
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-app.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore.js";
+
         const firebaseConfig = {
             apiKey: "AIzaSyC9hw8fywmpeKUfS7TuFcP6bgpeL9t_25I",
             authDomain: "ro-boss-timer.firebaseapp.com",
@@ -240,9 +240,11 @@
             measurementId: "G-T39L35DDV0"
         };
 
-        // 初始化Firebase
+        // 使用 9.x SDK 的初始化方式
         const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
+
+        // 在此使用 db 或呼叫其他函式（例如 loadEventsFromFirebase()）
     </script>
 </head>
 
