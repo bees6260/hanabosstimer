@@ -232,14 +232,14 @@
 
         // 在此填入您的 Firebase 設定
         const firebaseConfig = {
-  apiKey: "AIzaSyC9hw8fywmpeKUfS7TuFcP6bgpeL9t_25I",
-  authDomain: "ro-boss-timer.firebaseapp.com",
-  projectId: "ro-boss-timer",
-  storageBucket: "ro-boss-timer.firebasestorage.app",
-  messagingSenderId: "743569692128",
-  appId: "1:743569692128:web:92c439c1c58a9c6801c785",
-  measurementId: "G-T39L35DDV0"
-};
+            apiKey: "AIzaSyC9hw8fywmpeKUfS7TuFcP6bgpeL9t_25I",
+            authDomain: "ro-boss-timer.firebaseapp.com",
+            projectId: "ro-boss-timer",
+            storageBucket: "ro-boss-timer.firebasestorage.app",
+            messagingSenderId: "743569692128",
+            appId: "1:743569692128:web:92c439c1c58a9c6801c785",
+            measurementId: "G-T39L35DDV0"
+        };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -344,13 +344,20 @@
 
             dialogBossName.textContent = bosses[bossIndex].name;
 
+            // 使用本地時間，而非toISOString()
             const now = new Date();
-            const timeString = now.toISOString().slice(0, 16);
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+
+            const timeString = `${year}-${month}-${day}T${hours}:${minutes}`;
             dialogTimeInput.value = timeString;
 
             dialog.style.display = 'block';
             overlay.style.display = 'block';
-        }
+        };
 
         window.closeTimeDialog = function () {
             const dialog = document.getElementById('timeDialog');
@@ -358,7 +365,7 @@
             dialog.style.display = 'none';
             overlay.style.display = 'none';
             currentBossIndex = null;
-        }
+        };
 
         window.confirmCustomTime = async function () {
             const timeInput = document.getElementById('dialogTimeInput');
