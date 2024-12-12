@@ -225,70 +225,25 @@
             font-size: 24px;
         }
     </style>
-    <!-- 引入 Firebase SDK -->
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-app.js";
-        import { getFirestore } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore.js";
 
+        // 在此填入您的 Firebase 設定
         const firebaseConfig = {
-            apiKey: "AIzaSyC9hw8fywmpeKUfS7TuFcP6bgpeL9t_25I",
-            authDomain: "ro-boss-timer.firebaseapp.com",
-            projectId: "ro-boss-timer",
-            storageBucket: "ro-boss-timer.firebasestorage.app",
-            messagingSenderId: "743569692128",
-            appId: "1:743569692128:web:92c439c1c58a9c6801c785",
-            measurementId: "G-T39L35DDV0"
-        };
+  apiKey: "AIzaSyC9hw8fywmpeKUfS7TuFcP6bgpeL9t_25I",
+  authDomain: "ro-boss-timer.firebaseapp.com",
+  projectId: "ro-boss-timer",
+  storageBucket: "ro-boss-timer.firebasestorage.app",
+  messagingSenderId: "743569692128",
+  appId: "1:743569692128:web:92c439c1c58a9c6801c785",
+  measurementId: "G-T39L35DDV0"
+};
 
-        // 使用 9.x SDK 的初始化方式
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // 在此使用 db 或呼叫其他函式（例如 loadEventsFromFirebase()）
-    </script>
-</head>
-
-<body>
-    <div id="eventLog">
-        <div id="eventLogActions">
-            <button onclick="copyAllEvents()">複製所有事件</button>
-        </div>
-        <div id="eventLogContent"></div>
-    </div>
-
-    <div class="search-container">
-        <input type="text" id="searchInput" placeholder="搜尋Boss...">
-    </div>
-    <div class="page-title">
-        <h1>哈娜RO Boss計時器</h1>
-    </div>
-    <div class="overlay" id="overlay"></div>
-    <div class="input-time-dialog" id="timeDialog">
-        <h3 id="dialogBossName"></h3>
-        <input type="datetime-local" id="dialogTimeInput">
-        <div class="dialog-buttons">
-            <button onclick="closeTimeDialog()">取消</button>
-            <button onclick="confirmCustomTime()">確認</button>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="mvp-section">
-            <div class="category-title">MVP</div>
-            <div class="cards-container">
-                <!-- MVP卡片將在這裡生成 -->
-            </div>
-        </div>
-
-        <div class="poring-section">
-            <div class="category-title">波利家族</div>
-            <div class="cards-container">
-                <!-- 波利家族卡片將在這裡生成 -->
-            </div>
-        </div>
-    </div>
-
-    <script>
         const bosses = [
             { category: "MVP", name: "1039 巴風特", respawnTime: 3600000 },
             { category: "MVP", name: "1046 死靈(吉分)", respawnTime: 3600000 },
@@ -342,22 +297,20 @@
         let bossTimers = [];
         let currentBossIndex = null;
 
-        // 從Firebase讀取已有事件
         async function loadEventsFromFirebase() {
-            const snapshot = await db.collection('bossEvents').get();
-            snapshot.forEach(doc => {
-                const data = doc.data();
+            const snapshot = await getDocs(collection(db, 'bossEvents'));
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
                 const bossIndex = bosses.findIndex(b => b.name === data.bossName);
                 if (bossIndex !== -1) {
                     const killTime = new Date(data.killTime);
                     const respawnTime = new Date(data.respawnTime);
-                    addToEventLog(data.bossName, killTime, respawnTime, doc.id);
-                    startTimer(bossIndex, killTime, respawnTime, doc.id);
+                    addToEventLog(data.bossName, killTime, respawnTime, docSnap.id);
+                    startTimer(bossIndex, killTime, respawnTime, docSnap.id);
                 }
             });
         }
 
-        // 生成卡片
         function generateCards() {
             const mvpContainer = document.querySelector('.mvp-section .cards-container');
             const poringContainer = document.querySelector('.poring-section .cards-container');
@@ -366,12 +319,12 @@
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.innerHTML = `
-            <h3>${boss.name}</h3>
-            <div class="controls">
-                <button onclick="recordKill(${index})">記錄擊殺</button>
-                <button onclick="openTimeDialog(${index})">手動輸入時間</button>
-            </div>
-        `;
+                    <h3>${boss.name}</h3>
+                    <div class="controls">
+                        <button onclick="recordKill(${index})">記錄擊殺</button>
+                        <button onclick="openTimeDialog(${index})">手動輸入時間</button>
+                    </div>
+                `;
 
                 if (boss.category === "MVP") {
                     mvpContainer.appendChild(card);
@@ -381,23 +334,8 @@
             });
         }
 
-        // 搜尋功能
-        document.getElementById('searchInput').addEventListener('input', function (e) {
-            const searchText = e.target.value.toLowerCase();
-            const cards = document.getElementsByClassName('card');
-
-            Array.from(cards).forEach(card => {
-                const bossName = card.querySelector('h3').textContent.toLowerCase();
-                if (bossName.includes(searchText)) {
-                    card.classList.remove('hidden');
-                } else {
-                    card.classList.add('hidden');
-                }
-            });
-        });
-
-        // 手動輸入時間相關函數
-        function openTimeDialog(bossIndex) {
+        // 因為使用module, window.onload觸發前會定義全局函式需加在window上:
+        window.openTimeDialog = function (bossIndex) {
             currentBossIndex = bossIndex;
             const dialog = document.getElementById('timeDialog');
             const overlay = document.getElementById('overlay');
@@ -406,7 +344,6 @@
 
             dialogBossName.textContent = bosses[bossIndex].name;
 
-            // 設定默認時間為當前時間
             const now = new Date();
             const timeString = now.toISOString().slice(0, 16);
             dialogTimeInput.value = timeString;
@@ -415,7 +352,7 @@
             overlay.style.display = 'block';
         }
 
-        function closeTimeDialog() {
+        window.closeTimeDialog = function () {
             const dialog = document.getElementById('timeDialog');
             const overlay = document.getElementById('overlay');
             dialog.style.display = 'none';
@@ -423,7 +360,7 @@
             currentBossIndex = null;
         }
 
-        async function confirmCustomTime() {
+        window.confirmCustomTime = async function () {
             const timeInput = document.getElementById('dialogTimeInput');
             const customDate = new Date(timeInput.value);
             if (currentBossIndex !== null) {
@@ -432,18 +369,16 @@
             closeTimeDialog();
         }
 
-        async function recordKill(bossIndex) {
+        window.recordKill = async function (bossIndex) {
             const now = new Date();
             await updateBossTimer(bossIndex, now);
         }
 
-        // 將事件寫入 Firebase 並啟動計時
         async function updateBossTimer(bossIndex, killTime) {
             const boss = bosses[bossIndex];
             const respawnTime = new Date(killTime.getTime() + boss.respawnTime);
 
-            // 將事件存入Firebase
-            const docRef = await db.collection('bossEvents').add({
+            const docRef = await addDoc(collection(db, 'bossEvents'), {
                 bossName: boss.name,
                 killTime: killTime.toISOString(),
                 respawnTime: respawnTime.toISOString()
@@ -484,16 +419,16 @@
             logItem.className = 'log-item';
             logItem.setAttribute('data-doc-id', docId);
             logItem.innerHTML = `
-        <div class="log-content">
-            ${bossName} - 
-            擊殺: ${killTime.toLocaleString()} | 
-            重生: ${respawnTime.toLocaleString()} | 
-            倒數: <span class="timer">計算中...</span>
-        </div>
-        <div class="log-actions">
-            <button class="cancel-btn" onclick="cancelEvent('${logId}')">取消</button>
-        </div>
-    `;
+                <div class="log-content">
+                    ${bossName} - 
+                    擊殺: ${killTime.toLocaleString()} | 
+                    重生: ${respawnTime.toLocaleString()} | 
+                    倒數: <span class="timer">計算中...</span>
+                </div>
+                <div class="log-actions">
+                    <button class="cancel-btn" onclick="cancelEvent('${logId}')">取消</button>
+                </div>
+            `;
 
             const existingLog = document.getElementById(logId);
             if (existingLog) {
@@ -506,16 +441,14 @@
             updateEventLogHeight();
         }
 
-        async function cancelEvent(logId) {
+        window.cancelEvent = async function (logId) {
             const logItem = document.getElementById(logId);
             if (logItem) {
                 const docId = logItem.getAttribute('data-doc-id');
-                // 從Firebase刪除
-                await db.collection('bossEvents').doc(docId).delete();
+                await deleteDoc(doc(db, 'bossEvents', docId));
 
                 logItem.remove();
                 const bossName = logId.replace(/^log-/, '');
-                const boss = bosses.find(b => b.name.replace(/[^a-zA-Z0-9]/g, '') === bossName);
                 const bossIndex = bosses.findIndex(b => b.name.replace(/[^a-zA-Z0-9]/g, '') === bossName);
 
                 if (bossIndex >= 0 && bossTimers[bossIndex]) {
@@ -525,7 +458,7 @@
             }
         }
 
-        function copyAllEvents() {
+        window.copyAllEvents = function () {
             const logContent = document.getElementById('eventLogContent');
             let textToCopy = '';
             const logItems = logContent.getElementsByClassName('log-item');
@@ -581,6 +514,47 @@
             updateEventLogHeight();
         };
     </script>
+</head>
+
+<body>
+    <div id="eventLog">
+        <div id="eventLogActions">
+            <button onclick="copyAllEvents()">複製所有事件</button>
+        </div>
+        <div id="eventLogContent"></div>
+    </div>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="搜尋Boss...">
+    </div>
+    <div class="page-title">
+        <h1>哈娜RO Boss計時器</h1>
+    </div>
+    <div class="overlay" id="overlay"></div>
+    <div class="input-time-dialog" id="timeDialog">
+        <h3 id="dialogBossName"></h3>
+        <input type="datetime-local" id="dialogTimeInput">
+        <div class="dialog-buttons">
+            <button onclick="closeTimeDialog()">取消</button>
+            <button onclick="confirmCustomTime()">確認</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="mvp-section">
+            <div class="category-title">MVP</div>
+            <div class="cards-container">
+                <!-- MVP卡片將在這裡生成 -->
+            </div>
+        </div>
+
+        <div class="poring-section">
+            <div class="category-title">波利家族</div>
+            <div class="cards-container">
+                <!-- 波利家族卡片將在這裡生成 -->
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
