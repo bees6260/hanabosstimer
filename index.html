@@ -322,7 +322,8 @@
                     <h3>${boss.name}</h3>
                     <div class="controls">
                         <button onclick="recordKill(${index})">記錄擊殺</button>
-                        <button onclick="openTimeDialog(${index})">手動輸入時間</button>
+                        <button onclick="openTimeDialog(${index})">輸入擊殺時間</button>
+                        <button onclick="openCountdownDialog(${index})">輸入倒數時間</button>
                     </div>
                 `;
 
@@ -514,6 +515,56 @@
             const height = eventLog.offsetHeight;
             document.documentElement.style.setProperty('--event-log-height', `${height}px`);
         }
+        let currentBossIndexForCountdown = null;
+
+        window.openCountdownDialog = function (bossIndex) {
+            currentBossIndexForCountdown = bossIndex;
+            const dialog = document.getElementById('countdownDialog');
+            const overlay = document.getElementById('overlay');
+            const dialogBossName = document.getElementById('countdownDialogBossName');
+            const countdownInput = document.getElementById('countdownInput');
+
+            dialogBossName.textContent = bosses[bossIndex].name;
+            countdownInput.value = 30; // 預設30分鐘或您想給的預設值
+
+            dialog.style.display = 'block';
+            overlay.style.display = 'block';
+        };
+        window.closeCountdownDialog = function () {
+            const dialog = document.getElementById('countdownDialog');
+            const overlay = document.getElementById('overlay');
+            dialog.style.display = 'none';
+            overlay.style.display = 'none';
+            currentBossIndexForCountdown = null;
+        };
+        window.confirmCountdown = async function () {
+            const countdownInput = document.getElementById('countdownInput');
+            const minutes = parseInt(countdownInput.value, 10);
+            if (currentBossIndexForCountdown !== null && minutes > 0) {
+                const boss = bosses[currentBossIndexForCountdown];
+                const now = new Date();
+                // respawnTime = 現在時間 + 使用者輸入的分鐘數
+                const respawnTime = new Date(now.getTime() + minutes * 60 * 1000);
+                // killTime = respawnTime - boss預設respawnTime
+                const killTime = new Date(respawnTime.getTime() - boss.respawnTime);
+
+                await updateBossTimerByRespawn(currentBossIndexForCountdown, killTime, respawnTime);
+            }
+            closeCountdownDialog();
+        };
+        async function updateBossTimerByRespawn(bossIndex, killTime, respawnTime) {
+            const boss = bosses[bossIndex];
+            // 將事件存入Firebase
+            const docRef = await addDoc(collection(db, 'bossEvents'), {
+                bossName: boss.name,
+                killTime: killTime.toISOString(),
+                respawnTime: respawnTime.toISOString()
+            });
+
+            addToEventLog(boss.name, killTime, respawnTime, docRef.id);
+            startTimer(bossIndex, killTime, respawnTime, docRef.id);
+        }
+
 
         window.onload = async function () {
             generateCards();
@@ -542,8 +593,17 @@
         <h3 id="dialogBossName"></h3>
         <input type="datetime-local" id="dialogTimeInput">
         <div class="dialog-buttons">
-            <button onclick="closeTimeDialog()">取消</button>
             <button onclick="confirmCustomTime()">確認</button>
+            <button onclick="closeTimeDialog()">取消</button>
+        </div>
+    </div>
+    <div class="input-time-dialog" id="countdownDialog">
+        <h3 id="countdownDialogBossName"></h3>
+        <label for="countdownInput">輸入距離重生的時間(分鐘):</label>
+        <input type="number" id="countdownInput" min="1" value="30">
+        <div class="dialog-buttons">
+            <button onclick="confirmCountdown()">確認</button>
+            <button onclick="closeCountdownDialog()">取消</button>
         </div>
     </div>
 
