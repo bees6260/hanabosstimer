@@ -169,14 +169,16 @@
         }
 
         .boss-image {
-            width: 120px;
-            /* 增加圖片寬度 */
-            height: 120px;
-            /* 增加圖片高度 */
             object-fit: cover;
+            /* 保持比例，填充外框 */
             border-radius: 8px;
-            border: 1px solid #ddd;
+            /* 圓角 */
+            /* border: 1px solid #ddd;  移除這行 */
+            display: block;
+            /* 避免行內元素間的間距問題 */
         }
+
+
 
         .controls {
             display: flex;
@@ -259,6 +261,42 @@
             margin-bottom: 5px;
             font-size: 14px;
             color: #333;
+        }
+
+        /* 固定尺寸的外框 */
+        .image-frame {
+            width: 150px;
+            /* 根據需求調整 */
+            height: 150px;
+            /* 根據需求調整 */
+            border: 2px solid #4CAF50;
+            /* 外框的邊框樣式 */
+            border-radius: 8px;
+            /* 圓角，可選 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            /* 隱藏超出外框的部分 */
+            background-color: #f9f9f9;
+            /* 外框的背景色，可選 */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            /* 可選：添加陰影 */
+            margin: 0 auto;
+            /* 居中外框，可根據布局調整 */
+        }
+
+        /* 圖片自適應外框 */
+        .image-frame img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            /* 保持比例，填充外框 */
+        }
+
+        .size-poring {
+            width: 50px;
+            height: 50px;
         }
     </style>
 
@@ -384,18 +422,20 @@
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.innerHTML = `
-                    <div class="card-header">
-                        <h3>${boss.name}</h3>
-                    </div>
-                    <div class="card-body">
-                        <img src="${boss.imageUrl}" alt="Boss Image" class="boss-image">
-                        <div class="controls">
-                            <button onclick="recordKill(${index})">記錄擊殺</button>
-                            <button onclick="openTimeDialog(${index})">輸入擊殺時間</button>
-                            <button onclick="openCountdownDialog(${index})">輸入雷達時間</button>
-                        </div>
-                    </div>
-                `;
+            <div class="card-header">
+                <h3>${boss.name}</h3>
+            </div>
+            <div class="card-body">
+                <div class="image-frame ${boss.size}">
+                    <img src="${boss.imageUrl}" alt="${boss.name}" class="boss-image">
+                </div>
+                <div class="controls">
+                    <button onclick="recordKill(${index})">記錄擊殺</button>
+                    <button onclick="openTimeDialog(${index})">輸入擊殺時間</button>
+                    <button onclick="openCountdownDialog(${index})">輸入倒數時間</button>
+                </div>
+            </div>
+        `;
 
                 if (boss.category === "MVP") {
                     mvpContainer.appendChild(card);
@@ -404,6 +444,11 @@
                 }
             });
         }
+
+        window.onload = async function () {
+            generateCards();
+            await loadEventsFromFirebase();
+        };
 
         // 打開輸入擊殺時間對話框
         window.openTimeDialog = function (bossIndex) {
