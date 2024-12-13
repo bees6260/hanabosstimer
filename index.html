@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 
 <head>
     <meta charset="UTF-8">
@@ -301,15 +301,71 @@
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
-            /* 保持比例，填充外框 */
         }
 
-        .size-poring {
-            width: 50px;
-            height: 50px;
+        /* 高亮無結果訊息 */
+        .no-results {
+            display: none;
+            text-align: center;
+            color: #ff4444;
+            margin-top: 20px;
+            font-size: 16px;
         }
     </style>
+</head>
 
+<body>
+    <div id="eventLog">
+        <div id="eventLogActions">
+            <button onclick="copyAllEvents()">複製所有事件</button>
+        </div>
+        <div id="eventLogContent"></div>
+    </div>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="搜尋Boss...">
+    </div>
+    <div class="page-title">
+        <h1>哈娜RO Boss計時器</h1>
+    </div>
+    <div class="overlay" id="overlay"></div>
+    <div class="input-time-dialog" id="timeDialog">
+        <h3 id="dialogBossName"></h3>
+        <input type="datetime-local" id="dialogTimeInput">
+        <div class="dialog-buttons">
+            <button onclick="confirmCustomTime()">確認</button>
+            <button onclick="closeTimeDialog()">取消</button>
+        </div>
+    </div>
+    <div class="input-time-dialog" id="countdownDialog">
+        <h3 id="countdownDialogBossName"></h3>
+        <label for="countdownInput">輸入距離重生的時間(分鐘):</label>
+        <input type="number" id="countdownInput" min="1" value="30">
+        <div class="dialog-buttons">
+            <button onclick="confirmCountdown()">確認</button>
+            <button onclick="closeCountdownDialog()">取消</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="mvp-section">
+            <div class="category-title">MVP</div>
+            <div class="cards-container">
+                <!-- MVP卡片將在這裡生成 -->
+            </div>
+        </div>
+
+        <div class="poring-section">
+            <div class="category-title">波利家族</div>
+            <div class="cards-container">
+                <!-- 波利家族卡片將在這裡生成 -->
+            </div>
+        </div>
+    </div>
+
+    <div class="no-results" id="noResultsMessage">沒有找到相關Boss</div>
+
+    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-app.js";
         import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore.js";
@@ -346,8 +402,8 @@
             { category: "MVP", name: "1190 獸人酋長", respawnTime: 3600000, imageUrl: "images/1190_ORC_LORD.gif" },
             { category: "MVP", name: "1251 冰暴騎士", respawnTime: 3600000, imageUrl: "images/1251_KNIGHT_OF_WINDSTORM.gif" },
             { category: "MVP", name: "1252 卡崙", respawnTime: 3600000, imageUrl: "images/1252_GARM.gif" },
-            { category: "MVP", name: "1272 黑王(古墓)", respawnTime: 3600000, imageUrl: "images/1272_DARK_LORD.gif" },
-            { category: "MVP", name: "1272 黑王(地下)", respawnTime: 3600000, imageUrl: "images/1272_DARK_LORD.gif" },
+            { category: "MVP", name: "1272 黑暗之王(古墓)", respawnTime: 3600000, imageUrl: "images/1272_DARK_LORD.gif" },
+            { category: "MVP", name: "1272 黑暗之王(地下)", respawnTime: 3600000, imageUrl: "images/1272_DARK_LORD.gif" },
             { category: "MVP", name: "1289 狂暴蟻后", respawnTime: 3600000, imageUrl: "images/1147_MAYA.gif" },
             { category: "MVP", name: "1312 烏龜將軍", respawnTime: 3600000, imageUrl: "images/1312_TURTLE_GENERAL.gif" },
             { category: "MVP", name: "1373 死靈騎士", respawnTime: 3600000, imageUrl: "images/1373_LORD_OF_DEATH.gif" },
@@ -377,8 +433,7 @@
             { category: "波利家族", name: "1582 惡波(朱原3)", respawnTime: 3600000, imageUrl: "images/1582_DEVILING.gif" }
         ];
 
-
-        let bossTimers = [];
+        let bossTimers = {}; // 使用對象來管理多個計時器
         let currentBossIndex = null;
         let currentBossIndexForCountdown = null;
 
@@ -409,19 +464,31 @@
             return `${hours}:${minutes}:${seconds}`;
         }
 
+        // 初始化頁面
+        window.onload = async function () {
+            generateCards();
+            await loadEventsFromFirebase();
+            setupSearchFunctionality(); // 初始化搜尋功能
+        };
+
         async function loadEventsFromFirebase() {
-            // 使用orderBy來排序重生時間
-            const q = query(collection(db, 'bossEvents'), orderBy('respawnTime', 'asc'));
-            const snapshot = await getDocs(q);
-            snapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                const bossIndex = bosses.findIndex(b => b.name === data.bossName);
-                if (bossIndex !== -1) {
-                    const respawnTime = new Date(data.respawnTime);
-                    addToEventLog(data.bossName, respawnTime, docSnap.id);
-                    startTimer(bossIndex, respawnTime, docSnap.id);
-                }
-            });
+            try {
+                // 使用orderBy來排序重生時間
+                const q = query(collection(db, 'bossEvents'), orderBy('respawnTime', 'asc'));
+                const snapshot = await getDocs(q);
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const bossIndex = bosses.findIndex(b => b.name === data.bossName);
+                    if (bossIndex !== -1) {
+                        const respawnTime = new Date(data.respawnTime);
+                        addToEventLog(data.bossName, respawnTime, docSnap.id);
+                        startTimer(bossIndex, respawnTime, docSnap.id);
+                    }
+                });
+            } catch (error) {
+                console.error("載入事件失敗:", error);
+                alert("載入事件失敗，請稍後再試。");
+            }
         }
 
         function generateCards() {
@@ -432,20 +499,20 @@
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.innerHTML = `
-            <div class="card-header">
-                <h3>${boss.name}</h3>
-            </div>
-            <div class="card-body">
-                <div class="image-frame ${boss.size}">
-                    <img src="${boss.imageUrl}" alt="${boss.name}" class="boss-image">
-                </div>
-                <div class="controls">
-                    <button onclick="recordKill(${index})">記錄擊殺</button>
-                    <button onclick="openTimeDialog(${index})">輸入擊殺時間</button>
-                    <button onclick="openCountdownDialog(${index})">輸入倒數時間</button>
-                </div>
-            </div>
-        `;
+                    <div class="card-header">
+                        <h3>${boss.name}</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="image-frame">
+                            <img src="${boss.imageUrl}" alt="${boss.name}" class="boss-image">
+                        </div>
+                        <div class="controls">
+                            <button onclick="recordKill(${index})">記錄擊殺</button>
+                            <button onclick="openTimeDialog(${index})">輸入擊殺時間</button>
+                            <button onclick="openCountdownDialog(${index})">輸入倒數時間</button>
+                        </div>
+                    </div>
+                `;
 
                 if (boss.category === "MVP") {
                     mvpContainer.appendChild(card);
@@ -455,7 +522,33 @@
             });
         }
 
+        // 新增搜尋功能
+        function setupSearchFunctionality() {
+            const searchInput = document.getElementById('searchInput');
+            const cards = document.querySelectorAll('.card');
+            const noResultsMessage = document.getElementById('noResultsMessage');
 
+            searchInput.addEventListener('input', function () {
+                const query = this.value.toLowerCase();
+                let anyVisible = false;
+
+                cards.forEach(card => {
+                    const bossName = card.querySelector('.card-header h3').textContent.toLowerCase();
+                    if (bossName.includes(query)) {
+                        card.style.display = 'flex'; // 顯示卡片
+                        anyVisible = true;
+                    } else {
+                        card.style.display = 'none'; // 隱藏卡片
+                    }
+                });
+
+                if (query !== "" && !anyVisible) {
+                    noResultsMessage.style.display = 'block';
+                } else {
+                    noResultsMessage.style.display = 'none';
+                }
+            });
+        }
 
         // 打開輸入擊殺時間對話框
         window.openTimeDialog = function (bossIndex) {
@@ -512,14 +605,19 @@
             const boss = bosses[bossIndex];
             const respawnTime = new Date(killTime.getTime() + boss.respawnTime);
 
-            const docRef = await addDoc(collection(db, 'bossEvents'), {
-                bossName: boss.name,
-                killTime: killTime.toISOString(),
-                respawnTime: respawnTime.toISOString()
-            });
+            try {
+                const docRef = await addDoc(collection(db, 'bossEvents'), {
+                    bossName: boss.name,
+                    killTime: killTime.toISOString(),
+                    respawnTime: respawnTime.toISOString()
+                });
 
-            addToEventLog(boss.name, respawnTime, docRef.id);
-            startTimer(bossIndex, respawnTime, docRef.id);
+                addToEventLog(boss.name, respawnTime, docRef.id);
+                startTimer(bossIndex, respawnTime, docRef.id);
+            } catch (error) {
+                console.error("新增事件失敗:", error);
+                alert("新增事件失敗，請稍後再試。");
+            }
         }
 
         // 開啟倒數時間對話框
@@ -566,55 +664,47 @@
         // 根據已知的擊殺時間和重生時間更新Boss計時器
         async function updateBossTimerByRespawn(bossIndex, killTime, respawnTime) {
             const boss = bosses[bossIndex];
-            const docRef = await addDoc(collection(db, 'bossEvents'), {
-                bossName: boss.name,
-                killTime: killTime.toISOString(),
-                respawnTime: respawnTime.toISOString()
-            });
+            try {
+                const docRef = await addDoc(collection(db, 'bossEvents'), {
+                    bossName: boss.name,
+                    killTime: killTime.toISOString(),
+                    respawnTime: respawnTime.toISOString()
+                });
 
-            addToEventLog(boss.name, respawnTime, docRef.id);
-            startTimer(bossIndex, respawnTime, docRef.id);
+                addToEventLog(boss.name, respawnTime, docRef.id);
+                startTimer(bossIndex, respawnTime, docRef.id);
+            } catch (error) {
+                console.error("新增倒數事件失敗:", error);
+                alert("新增倒數事件失敗，請稍後再試。");
+            }
         }
 
         // 啟動倒數計時器
         function startTimer(bossIndex, respawnTime, docId) {
-            if (bossTimers[bossIndex]) {
-                clearInterval(bossTimers[bossIndex]);
+            // 如果已經有這個 docId 的計時器，先清除它
+            if (bossTimers[docId]) {
+                clearInterval(bossTimers[docId]);
             }
 
-            bossTimers[bossIndex] = setInterval(() => {
+            // 啟動新的計時器
+            bossTimers[docId] = setInterval(() => {
                 const now = new Date();
                 const timeLeft = respawnTime - now;
 
                 if (timeLeft <= 0) {
-                    clearInterval(bossTimers[bossIndex]);
-                    updateEventLogTimer(bosses[bossIndex].name, "已重生!");
+                    clearInterval(bossTimers[docId]);
+                    updateEventLogTimer(docId, "已重生!");
                 } else {
                     const formattedCountdown = formatCountdown(timeLeft);
-                    updateEventLogTimer(bosses[bossIndex].name, formattedCountdown);
+                    updateEventLogTimer(docId, formattedCountdown);
                 }
             }, 1000);
         }
-        function setupSearchFunctionality() {
-            const searchInput = document.getElementById('searchInput');
-            searchInput.addEventListener('input', function () {
-                const query = this.value.toLowerCase();
-                const cards = document.querySelectorAll('.card');
 
-                cards.forEach(card => {
-                    const bossName = card.querySelector('.card-header h3').textContent.toLowerCase();
-                    if (bossName.includes(query)) {
-                        card.style.display = 'flex'; // 顯示卡片
-                    } else {
-                        card.style.display = 'none'; // 隱藏卡片
-                    }
-                });
-            });
-        }
         // 添加事件到事件列表
         function addToEventLog(bossName, respawnTime, docId) {
             const logDiv = document.getElementById('eventLogContent');
-            const logId = `log-${bossName.replace(/[^a-zA-Z0-9]/g, '')}`;
+            const logId = `log-${docId}`; // 使用 docId 生成唯一的 logId
             const logItem = document.createElement('div');
             logItem.id = logId;
             logItem.className = 'log-item';
@@ -638,12 +728,6 @@
                     重生: ${formattedRespawn}
                 </div>
             `;
-
-            // 如果事件已存在，先移除再插入以保持排序
-            const existingLog = document.getElementById(logId);
-            if (existingLog) {
-                logDiv.removeChild(existingLog);
-            }
 
             // 將新的事件插入到正確的位置以保持排序
             let inserted = false;
@@ -689,15 +773,18 @@
             const logItem = document.getElementById(logId);
             if (logItem) {
                 const docId = logItem.getAttribute('data-doc-id');
-                await deleteDoc(doc(db, 'bossEvents', docId));
+                try {
+                    await deleteDoc(doc(db, 'bossEvents', docId));
+                    logItem.remove();
 
-                logItem.remove();
-                const bossName = logId.replace(/^log-/, '');
-                const bossIndex = bosses.findIndex(b => b.name.replace(/[^a-zA-Z0-9]/g, '') === bossName);
-
-                if (bossIndex >= 0 && bossTimers[bossIndex]) {
-                    clearInterval(bossTimers[bossIndex]);
-                    bossTimers[bossIndex] = null;
+                    // 清除相應的計時器
+                    if (bossTimers[docId]) {
+                        clearInterval(bossTimers[docId]);
+                        delete bossTimers[docId];
+                    }
+                } catch (error) {
+                    console.error('刪除事件失敗:', error);
+                    alert('刪除事件失敗，請稍後再試。');
                 }
             }
         }
@@ -733,8 +820,8 @@
         }
 
         // 更新倒數計時器顯示
-        function updateEventLogTimer(bossName, timeString) {
-            const logId = `log-${bossName.replace(/[^a-zA-Z0-9]/g, '')}`;
+        function updateEventLogTimer(docId, timeString) {
+            const logId = `log-${docId}`;
             const logItem = document.getElementById(logId);
             if (logItem) {
                 const timerSpan = logItem.querySelector('.timer');
@@ -743,64 +830,7 @@
                 }
             }
         }
-
-        // 初始化頁面
-        window.onload = async function () {
-            generateCards();
-            await loadEventsFromFirebase();
-            setupSearchFunctionality(); // 初始化搜尋功能
-        };
     </script>
-</head>
-
-<body>
-    <div id="eventLog">
-        <div id="eventLogActions">
-            <button onclick="copyAllEvents()">複製所有事件</button>
-        </div>
-        <div id="eventLogContent"></div>
-    </div>
-
-    <div class="search-container">
-        <input type="text" id="searchInput" placeholder="搜尋Boss...">
-    </div>
-    <div class="page-title">
-        <h1>哈娜RO Boss計時器</h1>
-    </div>
-    <div class="overlay" id="overlay"></div>
-    <div class="input-time-dialog" id="timeDialog">
-        <h3 id="dialogBossName"></h3>
-        <input type="datetime-local" id="dialogTimeInput">
-        <div class="dialog-buttons">
-            <button onclick="confirmCustomTime()">確認</button>
-            <button onclick="closeTimeDialog()">取消</button>
-        </div>
-    </div>
-    <div class="input-time-dialog" id="countdownDialog">
-        <h3 id="countdownDialogBossName"></h3>
-        <label for="countdownInput">輸入距離重生的時間(分鐘):</label>
-        <input type="number" id="countdownInput" min="1" value="30">
-        <div class="dialog-buttons">
-            <button onclick="confirmCountdown()">確認</button>
-            <button onclick="closeCountdownDialog()">取消</button>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="mvp-section">
-            <div class="category-title">MVP</div>
-            <div class="cards-container">
-                <!-- MVP卡片將在這裡生成 -->
-            </div>
-        </div>
-
-        <div class="poring-section">
-            <div class="category-title">波利家族</div>
-            <div class="cards-container">
-                <!-- 波利家族卡片將在這裡生成 -->
-            </div>
-        </div>
-    </div>
 </body>
 
 </html>
