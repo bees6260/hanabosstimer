@@ -455,10 +455,7 @@
             });
         }
 
-        window.onload = async function () {
-            generateCards();
-            await loadEventsFromFirebase();
-        };
+
 
         // 打開輸入擊殺時間對話框
         window.openTimeDialog = function (bossIndex) {
@@ -598,7 +595,22 @@
                 }
             }, 1000);
         }
+        function setupSearchFunctionality() {
+            const searchInput = document.getElementById('searchInput');
+            searchInput.addEventListener('input', function () {
+                const query = this.value.toLowerCase();
+                const cards = document.querySelectorAll('.card');
 
+                cards.forEach(card => {
+                    const bossName = card.querySelector('.card-header h3').textContent.toLowerCase();
+                    if (bossName.includes(query)) {
+                        card.style.display = 'flex'; // 顯示卡片
+                    } else {
+                        card.style.display = 'none'; // 隱藏卡片
+                    }
+                });
+            });
+        }
         // 添加事件到事件列表
         function addToEventLog(bossName, respawnTime, docId) {
             const logDiv = document.getElementById('eventLogContent');
@@ -736,6 +748,7 @@
         window.onload = async function () {
             generateCards();
             await loadEventsFromFirebase();
+            setupSearchFunctionality(); // 初始化搜尋功能
         };
     </script>
 </head>
