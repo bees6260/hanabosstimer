@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>哈娜RO Boss計時器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            margin-right: 320px;
+            /* 為右側事件列表預留空間 */
+        }
+
+        /* 右側事件列表樣式 */
+        #eventLog {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 300px;
+            height: 100vh;
+            background: #333;
+            color: white;
+            padding: 10px;
+            z-index: 100;
+            overflow-y: auto;
+        }
+
+        .log-item {
+            display: flex;
+            flex-direction: column;
+            /* 確保垂直堆疊 */
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .log-info {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            /* 調整「倒數:」與倒數時間的間距 */
+        }
+
+        .log-content {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .timer {
+            color: #ff4444;
+            font-weight: bold;
+        }
+
+        .cancel-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            /* 減少內邊距 */
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            /* 減少字體大小 */
+            max-width: 70px;
+            /* 設定最大寬度 */
+            width: auto;
+            /* 讓按鈕寬度自動調整 */
+            white-space: nowrap;
+            /* 防止按鈕文字換行 */
+        }
+
+        .cancel-btn:hover {
+            background: #ff6666;
+        }
+
+        /* 搜尋框樣式 */
+        .search-container {
+            background: #fff;
+            padding: 10px;
+            z-index: 99;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            /* 調整間距 */
+        }
+
+        #searchInput {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .category-title {
+            width: 100%;
+            padding: 10px;
+            background: #333;
+            color: white;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+
+        /* 主容器樣式 */
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 40px;
+            /* 固定間距 */
+        }
+
+        .cards-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            width: 320px;
+            /* 增加寬度以容納圖片和按鈕 */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, box-shadow 0.2s;
+            /* 添加過渡效果 */
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transform: scale(1.02);
+        }
+
+        .card-header {
+            margin-bottom: 10px;
+        }
+
+        .card-header h3 {
+            margin: 0;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .card-body {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .boss-image {
+            object-fit: cover;
+            /* 保持比例，填充外框 */
+            border-radius: 8px;
+            /* 圓角 */
+            /* border: 1px solid #ddd;  移除這行 */
+            display: block;
+            /* 避免行內元素間的間距問題 */
+        }
+
+        /* 頁面標題樣式 */
+        .page-title {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .page-title h1 {
+            margin: 0;
+            padding: 10px;
+            color: #333;
+            font-size: 24px;
+        }
+
+
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            /* 減少按鈕間距 */
+            flex-grow: 1;
+            /* 讓按鈕區域填滿剩餘空間 */
+            max-width: 160px;
+            /* 設定控制區域的最大寬度 */
+        }
+
+        .controls button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            /* 減少內邊距 */
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            /* 減少字體大小 */
+            text-align: center;
+            max-width: 140px;
+            /* 設定按鈕的最大寬度 */
+            width: auto;
+            /* 讓按鈕寬度自動調整 */
+            white-space: nowrap;
+            /* 防止按鈕文字換行 */
+        }
+
+        .controls button:hover {
+            background: #45a049;
+        }
+
+        input[type="datetime-local"],
+        input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* 對話框樣式 */
+        .input-time-dialog {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        .dialog-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 15px;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        /* 新增的倒數時間對話框樣式 */
+        #countdownDialog label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        /* 固定尺寸的外框 */
+        .image-frame {
+            width: 150px;
+            /* 根據需求調整 */
+            height: 150px;
+            /* 根據需求調整 */
+            border: 2px solid #4CAF50;
+            /* 外框的邊框樣式 */
+            border-radius: 8px;
+            /* 圓角，可選 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            /* 隱藏超出外框的部分 */
+            background-color: #f9f9f9;
+            /* 外框的背景色，可選 */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            /* 可選：添加陰影 */
+            margin: 0 auto;
+            /* 居中外框，可根據布局調整 */
+        }
+
+        /* 圖片自適應外框 */
+        .image-frame img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* 高亮無結果訊息 */
+        .no-results {
+            display: none;
+            text-align: center;
+            color: #ff4444;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="eventLog">
+        <div id="eventLogActions">
+            <button onclick="copyAllEvents()">複製所有事件</button>
+        </div>
+        <div id="eventLogContent"></div>
+    </div>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="搜尋Boss...">
+    </div>
+    <div class="page-title">
+        <h1>哈娜RO Boss計時器</h1>
+    </div>
+    <div class="overlay" id="overlay"></div>
+    <div class="input-time-dialog" id="timeDialog">
+        <h3 id="dialogBossName"></h3>
+        <input type="datetime-local" id="dialogTimeInput">
+        <div class="dialog-buttons">
+            <button onclick="confirmCustomTime()">確認</button>
+            <button onclick="closeTimeDialog()">取消</button>
+        </div>
+    </div>
+    <div class="input-time-dialog" id="countdownDialog">
+        <h3 id="countdownDialogBossName"></h3>
+        <label for="countdownInput">輸入距離重生的時間(分鐘):</label>
+        <input type="number" id="countdownInput" min="1" value="30">
+        <div class="dialog-buttons">
+            <button onclick="confirmCountdown()">確認</button>
+            <button onclick="closeCountdownDialog()">取消</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="mvp-section">
+            <div class="category-title">MVP</div>
+            <div class="cards-container">
+                <!-- MVP卡片將在這裡生成 -->
+            </div>
+        </div>
+
+        <div class="poring-section">
+            <div class="category-title">波利家族</div>
+            <div class="cards-container">
+                <!-- 波利家族卡片將在這裡生成 -->
+            </div>
+        </div>
+    </div>
+
+    <div class="no-results" id="noResultsMessage">沒有找到相關Boss</div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-app.js";
+        import { getFirestore, collection, getDocs, setDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore.js";
+
+        // 在此填入您的 Firebase 設定
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "ro-boss-timer.firebaseapp.com",
+            projectId: "ro-boss-timer",
+            storageBucket: "ro-boss-timer.appspot.com",
+            messagingSenderId: "743569692128",
+            appId: "1:743569692128:web:92c439c1c58a9c6801c785",
+            measurementId: "G-T39L35DDV0"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const bosses = [
+            { category: "MVP", name: "1039 巴風特", respawnTime: 3600000, imageUrl: "images/1039_BAPHOMET.gif" },
+            { category: "MVP", name: "1046 死靈(吉分)", respawnTime: 3600000, imageUrl: "images/1046_DOPPELGANGER.gif" },
+            { category: "MVP", name: "1046 死靈(地下)", respawnTime: 3600000, imageUrl: "images/1046_DOPPELGANGER.gif" },
+            { category: "MVP", name: "1059 蜂后", respawnTime: 3600000, imageUrl: "images/1059_MISTRESS.gif" },
+            { category: "MVP", name: "1086 黃金蟲", respawnTime: 3600000, imageUrl: "images/1086_GOLDEN_BUG.gif" },
+            { category: "MVP", name: "1087 獸人英雄1", respawnTime: 3600000, imageUrl: "images/1087_ORK_HERO.gif" },
+            { category: "MVP", name: "1087 獸人英雄2", respawnTime: 3600000, imageUrl: "images/1087_ORK_HERO.gif" },
+            { category: "MVP", name: "1112 海盜之王", respawnTime: 3600000, imageUrl: "images/1112_DRAKE.gif" },
+            { category: "MVP", name: "1115 虎王", respawnTime: 3600000, imageUrl: "images/1115_EDDGA.gif" },
+            { category: "MVP", name: "1147 蟻后", respawnTime: 3600000, imageUrl: "images/1147_MAYA.gif" },
+            { category: "MVP", name: "1150 月夜貓", respawnTime: 3600000, imageUrl: "images/1150_MOONLIGHT.gif" },
+            { category: "MVP", name: "1157 法老王", respawnTime: 3600000, imageUrl: "images/1157_PHARAOH.gif" },
+            { category: "MVP", name: "1159 皮里恩", respawnTime: 3600000, imageUrl: "images/1159_PHREEONI.gif" },
+            { category: "MVP", name: "1190 獸人酋長", respawnTime: 3600000, imageUrl: "images/1190_ORC_LORD.gif" },
+            { category: "MVP", name: "1251 冰暴騎士", respawnTime: 3600000, imageUrl: "images/1251_KNIGHT_OF_WINDSTORM.gif" },
+            { category: "MVP", name: "1252 卡崙", respawnTime: 3600000, imageUrl: "images/1252_GARM.gif" },
+            { category: "MVP", name: "1272 黑暗之王(古墓)", respawnTime: 3600000, imageUrl: "images/1272_DARK_LORD.gif" },
+            { category: "MVP", name: "1272 黑暗之王(地下)", respawnTime: 3600000, imageUrl: "images/1272_DARK_LORD.gif" },
+            { category: "MVP", name: "1289 狂暴蟻后", respawnTime: 3600000, imageUrl: "images/1147_MAYA.gif" },
+            { category: "MVP", name: "1312 烏龜將軍", respawnTime: 3600000, imageUrl: "images/1312_TURTLE_GENERAL.gif" },
+            { category: "MVP", name: "1373 死靈騎士", respawnTime: 3600000, imageUrl: "images/1373_LORD_OF_DEATH.gif" },
+            { category: "MVP", name: "1389 德古拉", respawnTime: 3600000, imageUrl: "images/1389德古拉男爵.gif" },
+            { category: "MVP", name: "1418 墨蛇君", respawnTime: 3600000, imageUrl: "images/1418墨蛇君.gif" },
+            { category: "MVP", name: "1492 元靈武士", respawnTime: 3600000, imageUrl: "images/1492元靈武士.gif" },
+            { category: "MVP", name: "1511 古埃及王", respawnTime: 3600000, imageUrl: "images/1511古埃及王.gif" },
+            { category: "MVP", name: "1518 白素貞", respawnTime: 3600000, imageUrl: "images/1630_BACSOJIN.gif" },
+            { category: "MVP", name: "1583 塔奧群卡", respawnTime: 3600000, imageUrl: "images/1583_TAO_GUNKA.gif" },
+            { category: "MVP", name: "1623 RSX-0806", respawnTime: 3600000, imageUrl: "images/1623_RSX-0806.gif" },
+            { category: "MVP", name: "1685 貝思波", respawnTime: 3600000, imageUrl: "images/1685_APOCALIPS_H.gif" },
+            { category: "MVP", name: "1688 嗒妮小姐", respawnTime: 3600000, imageUrl: "images/1688_LADY_TANEE.gif" },
+            { category: "MVP", name: "1708 魔劍", respawnTime: 3600000, imageUrl: "images/1708_THANATOS.gif" },
+            { category: "MVP", name: "1719 龍王", respawnTime: 3600000, imageUrl: "images/1719_DETALE.gif" },
+            { category: "MVP", name: "1734 齊爾-D-01", respawnTime: 3600000, imageUrl: "images/1734_KIEL.gif" },
+            { category: "MVP", name: "1768 幽暗夢魘", respawnTime: 3600000, imageUrl: "images/1768_GLOOMUNDERNIGHT.gif" },
+            { category: "MVP", name: "1871 墮落大神官悉潘", respawnTime: 3600000, imageUrl: "images/1871_FALLINGBISHOP.gif" },
+            { category: "MVP", name: "1873 貝雷傑", respawnTime: 3600000, imageUrl: "images/1874_BEELZEBUB.gif" },
+            { category: "波利家族", name: "1096 天波(朱原3)", respawnTime: 3600000, imageUrl: "images/1096_ANGELING.gif" },
+            { category: "波利家族", name: "1096 天波(斐原4)", respawnTime: 3600000, imageUrl: "images/1096_ANGELING.gif" },
+            { category: "波利家族", name: "1120 幽波(沉船2)", respawnTime: 3600000, imageUrl: "images/1120_GHOSTRING.gif" },
+            { category: "波利家族", name: "1120 幽波(迷藏3)", respawnTime: 3600000, imageUrl: "images/1120_GHOSTRING.gif" },
+            { category: "波利家族", name: "1120 幽波(斐原4)", respawnTime: 3600000, imageUrl: "images/1120_GHOSTRING.gif" },
+            { category: "波利家族", name: "1120 幽波(公會4)", respawnTime: 3600000, imageUrl: "images/1120_GHOSTRING.gif" },
+            { category: "波利家族", name: "1388 聖天波(朱原5)", respawnTime: 3600000, imageUrl: "images/1388_ARCHANGELING.gif" },
+            { category: "波利家族", name: "1582 惡波(斐原4)", respawnTime: 3600000, imageUrl: "images/1582_DEVILING.gif" },
+            { category: "波利家族", name: "1582 惡波(朱原3)", respawnTime: 3600000, imageUrl: "images/1582_DEVILING.gif" }
+        ];
+
+        let bossTimers = {}; // 使用對象來管理多個計時器
+        let currentBossIndex = null;
+        let currentBossIndexForCountdown = null;
+
+        // 格式化重生時間為 MM/DD 上午/下午 HH:MM:SS
+        function formatRespawnTime(date) {
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+
+            let hours = date.getHours();
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            const period = hours >= 12 ? '下午' : '上午';
+
+            hours = hours % 12;
+            hours = hours ? hours : 12; // the hour '0' should be '12'
+            // 移除小時的前導零
+            hours = String(hours);
+
+            return `${month}/${day} ${period} ${hours}:${minutes}:${seconds}`;
+        }
+
+        // 格式化倒數時間為 HH:MM:SS
+        function formatCountdown(timeLeft) {
+            const totalSeconds = Math.floor(timeLeft / 1000);
+            const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+            const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+            const seconds = String(totalSeconds % 60).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        // 轉換 Boss 名稱為安全的 Firestore 文檔 ID
+        function sanitizeBossName(bossName) {
+            return bossName.replace(/[^a-zA-Z0-9_-]/g, '_');
+        }
+
+        // 初始化頁面
+        window.onload = async function () {
+            generateCards();
+            await loadEventsFromFirebase();
+            setupSearchFunctionality(); // 初始化搜尋功能
+        };
+
+        async function loadEventsFromFirebase() {
+            try {
+                // 使用orderBy來排序重生時間
+                const q = query(collection(db, 'bossEvents'), orderBy('respawnTime', 'asc'));
+                const snapshot = await getDocs(q);
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const bossIndex = bosses.findIndex(b => b.name === data.bossName);
+                    if (bossIndex !== -1) {
+                        const respawnTime = new Date(data.respawnTime);
+                        addToEventLog(bossIndex, respawnTime, docSnap.id);
+                        startTimer(bossIndex, respawnTime, docSnap.id);
+                    }
+                });
+            } catch (error) {
+                console.error("載入事件失敗:", error);
+                alert("載入事件失敗，請稍後再試。");
+            }
+        }
+
+        function generateCards() {
+            const mvpContainer = document.querySelector('.mvp-section .cards-container');
+            const poringContainer = document.querySelector('.poring-section .cards-container');
+
+            bosses.forEach((boss, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <h3>${boss.name}</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="image-frame">
+                            <img src="${boss.imageUrl}" alt="${boss.name}" class="boss-image">
+                        </div>
+                        <div class="controls">
+                            <button onclick="recordKill(${index})">記錄擊殺</button>
+                            <button onclick="openTimeDialog(${index})">輸入擊殺時間</button>
+                            <button onclick="openCountdownDialog(${index})">輸入倒數時間</button>
+                        </div>
+                    </div>
+                `;
+
+                if (boss.category === "MVP") {
+                    mvpContainer.appendChild(card);
+                } else {
+                    poringContainer.appendChild(card);
+                }
+            });
+        }
+
+        // 新增搜尋功能
+        function setupSearchFunctionality() {
+            const searchInput = document.getElementById('searchInput');
+            const cards = document.querySelectorAll('.card');
+            const noResultsMessage = document.getElementById('noResultsMessage');
+
+            searchInput.addEventListener('input', function () {
+                const query = this.value.toLowerCase();
+                let anyVisible = false;
+
+                cards.forEach(card => {
+                    const bossName = card.querySelector('.card-header h3').textContent.toLowerCase();
+                    if (bossName.includes(query)) {
+                        card.style.display = 'flex'; // 顯示卡片
+                        anyVisible = true;
+                    } else {
+                        card.style.display = 'none'; // 隱藏卡片
+                    }
+                });
+
+                if (query !== "" && !anyVisible) {
+                    noResultsMessage.style.display = 'block';
+                } else {
+                    noResultsMessage.style.display = 'none';
+                }
+            });
+        }
+
+        // 打開輸入擊殺時間對話框
+        window.openTimeDialog = function (bossIndex) {
+            currentBossIndex = bossIndex;
+            const dialog = document.getElementById('timeDialog');
+            const overlay = document.getElementById('overlay');
+            const dialogBossName = document.getElementById('dialogBossName');
+            const dialogTimeInput = document.getElementById('dialogTimeInput');
+
+            dialogBossName.textContent = bosses[bossIndex].name;
+
+            // 使用本地時間格式化為 datetime-local 所需格式
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+
+            const timeString = `${year}-${month}-${day}T${hours}:${minutes}`;
+            dialogTimeInput.value = timeString;
+
+            dialog.style.display = 'block';
+            overlay.style.display = 'block';
+        };
+
+        // 關閉輸入擊殺時間對話框
+        window.closeTimeDialog = function () {
+            const dialog = document.getElementById('timeDialog');
+            const overlay = document.getElementById('overlay');
+            dialog.style.display = 'none';
+            overlay.style.display = 'none';
+            currentBossIndex = null;
+        };
+
+        // 確認自訂時間並更新事件
+        window.confirmCustomTime = async function () {
+            const timeInput = document.getElementById('dialogTimeInput');
+            const customDate = new Date(timeInput.value);
+            if (currentBossIndex !== null) {
+                await updateBossTimer(currentBossIndex, customDate);
+            }
+            closeTimeDialog();
+        }
+
+        // 記錄擊殺時間
+        window.recordKill = async function (bossIndex) {
+            const now = new Date();
+            await updateBossTimer(bossIndex, now);
+        }
+
+        // 更新Boss計時器
+        async function updateBossTimer(bossIndex, killTime) {
+            const boss = bosses[bossIndex];
+            const respawnTime = new Date(killTime.getTime() + boss.respawnTime);
+            const sanitizedBossName = sanitizeBossName(boss.name);
+
+            try {
+                // 使用 setDoc 來覆蓋或創建文檔
+                await setDoc(doc(db, 'bossEvents', sanitizedBossName), {
+                    bossName: boss.name,
+                    killTime: killTime.toISOString(),
+                    respawnTime: respawnTime.toISOString()
+                });
+
+                addToEventLog(bossIndex, respawnTime, sanitizedBossName);
+                startTimer(bossIndex, respawnTime, sanitizedBossName);
+            } catch (error) {
+                console.error("新增事件失敗:", error);
+                alert("新增事件失敗，請稍後再試。");
+            }
+        }
+
+        // 開啟倒數時間對話框
+        window.openCountdownDialog = function (bossIndex) {
+            currentBossIndexForCountdown = bossIndex;
+            const dialog = document.getElementById('countdownDialog');
+            const overlay = document.getElementById('overlay');
+            const dialogBossName = document.getElementById('countdownDialogBossName');
+            const countdownInput = document.getElementById('countdownInput');
+
+            dialogBossName.textContent = bosses[bossIndex].name;
+            countdownInput.value = 30; // 預設30分鐘
+
+            dialog.style.display = 'block';
+            overlay.style.display = 'block';
+        };
+
+        // 關閉倒數時間對話框
+        window.closeCountdownDialog = function () {
+            const dialog = document.getElementById('countdownDialog');
+            const overlay = document.getElementById('overlay');
+            dialog.style.display = 'none';
+            overlay.style.display = 'none';
+            currentBossIndexForCountdown = null;
+        };
+
+        // 確認倒數時間並更新事件
+        window.confirmCountdown = async function () {
+            const countdownInput = document.getElementById('countdownInput');
+            const minutes = parseInt(countdownInput.value, 10);
+            if (currentBossIndexForCountdown !== null && minutes > 0) {
+                const boss = bosses[currentBossIndexForCountdown];
+                const now = new Date();
+                // respawnTime = 現在時間 + 使用者輸入的分鐘數
+                const respawnTime = new Date(now.getTime() + minutes * 60 * 1000);
+                // killTime = respawnTime - boss預設respawnTime
+                const killTime = new Date(respawnTime.getTime() - boss.respawnTime);
+
+                await updateBossTimerByRespawn(currentBossIndexForCountdown, killTime, respawnTime);
+            }
+            closeCountdownDialog();
+        };
+
+        // 根據已知的擊殺時間和重生時間更新Boss計時器
+        async function updateBossTimerByRespawn(bossIndex, killTime, respawnTime) {
+            const boss = bosses[bossIndex];
+            const sanitizedBossName = sanitizeBossName(boss.name);
+
+            try {
+                // 使用 setDoc 來覆蓋或創建文檔
+                await setDoc(doc(db, 'bossEvents', sanitizedBossName), {
+                    bossName: boss.name,
+                    killTime: killTime.toISOString(),
+                    respawnTime: respawnTime.toISOString()
+                });
+
+                addToEventLog(bossIndex, respawnTime, sanitizedBossName);
+                startTimer(bossIndex, respawnTime, sanitizedBossName);
+            } catch (error) {
+                console.error("新增倒數事件失敗:", error);
+                alert("新增倒數事件失敗，請稍後再試。");
+            }
+        }
+
+        // 啟動倒數計時器
+        function startTimer(bossIndex, respawnTime, docId) {
+            // 如果已經有這個 docId 的計時器，先清除它
+            if (bossTimers[docId]) {
+                clearInterval(bossTimers[docId]);
+            }
+
+            // 啟動新的計時器
+            bossTimers[docId] = setInterval(() => {
+                const now = new Date();
+                const timeLeft = respawnTime - now;
+
+                if (timeLeft <= 0) {
+                    clearInterval(bossTimers[docId]);
+                    updateEventLogTimer(docId, "已重生!");
+                } else {
+                    const formattedCountdown = formatCountdown(timeLeft);
+                    updateEventLogTimer(docId, formattedCountdown);
+                }
+            }, 1000);
+        }
+
+        // 添加或更新事件到事件列表
+        function addToEventLog(bossIndex, respawnTime, docId) {
+            const logDiv = document.getElementById('eventLogContent');
+            const logId = `log-${docId}`; // 使用 docId 生成唯一的 logId
+            let logItem = document.getElementById(logId);
+
+            // 如果事件已存在，更新內容
+            if (logItem) {
+                // 格式化重生時間
+                const formattedRespawn = formatRespawnTime(respawnTime);
+                // 更新倒數顯示
+                logItem.querySelector('.log-info .timer').textContent = "計算中...";
+                logItem.querySelector('.log-content').textContent = `重生: ${formattedRespawn}`;
+            } else {
+                // 創建新的事件項目
+                logItem = document.createElement('div');
+                logItem.id = logId;
+                logItem.className = 'log-item';
+                logItem.setAttribute('data-doc-id', docId);
+
+                // 格式化重生時間
+                const formattedRespawn = formatRespawnTime(respawnTime);
+
+                // 設定倒數計時器的初始顯示
+                const initialCountdown = "計算中...";
+
+                // 調整顯示格式：取消鍵在同一行，縮短「倒數:」與倒數時間的距離
+                logItem.innerHTML = `
+                    <div class="log-header">
+                        <div class="log-info">
+                            ${bosses[bossIndex].name} | 倒數:<span class="timer">${initialCountdown}</span>
+                        </div>
+                        <button class="cancel-btn" onclick="cancelEvent('${docId}')">取消</button>
+                    </div>
+                    <div class="log-content">
+                        重生: ${formattedRespawn}
+                    </div>
+                `;
+
+                // 將新的事件插入到正確的位置以保持排序
+                let inserted = false;
+                const allLogs = Array.from(logDiv.children);
+                for (let i = 0; i < allLogs.length; i++) {
+                    const existingRespawnText = allLogs[i].querySelector('.log-content')?.textContent || "";
+                    const existingRespawnDateMatch = existingRespawnText.match(/重生: (\d{2})\/(\d{2}) (\S+) (\d{1,2}):(\d{2}):(\d{2})/);
+                    if (existingRespawnDateMatch) {
+                        const month = parseInt(existingRespawnDateMatch[1], 10);
+                        const day = parseInt(existingRespawnDateMatch[2], 10);
+                        const period = existingRespawnDateMatch[3];
+                        let hours = parseInt(existingRespawnDateMatch[4], 10);
+                        const minutes = parseInt(existingRespawnDateMatch[5], 10);
+                        const seconds = parseInt(existingRespawnDateMatch[6], 10);
+
+                        // 轉換為24小時制
+                        if (period === '下午' && hours !== 12) hours += 12;
+                        if (period === '上午' && hours === 12) hours = 0;
+
+                        const existingRespawnDate = new Date();
+                        existingRespawnDate.setMonth(month - 1);
+                        existingRespawnDate.setDate(day);
+                        existingRespawnDate.setHours(hours);
+                        existingRespawnDate.setMinutes(minutes);
+                        existingRespawnDate.setSeconds(seconds);
+                        existingRespawnDate.setMilliseconds(0);
+
+                        if (respawnTime < existingRespawnDate) {
+                            logDiv.insertBefore(logItem, allLogs[i]);
+                            inserted = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!inserted) {
+                    logDiv.appendChild(logItem);
+                }
+            }
+        }
+
+        // 取消事件
+        window.cancelEvent = async function (docId) {
+            const logItem = document.getElementById(`log-${docId}`);
+            if (logItem) {
+                try {
+                    await deleteDoc(doc(db, 'bossEvents', docId));
+                    logItem.remove();
+
+                    // 清除相應的計時器
+                    if (bossTimers[docId]) {
+                        clearInterval(bossTimers[docId]);
+                        delete bossTimers[docId];
+                    }
+                } catch (error) {
+                    console.error('刪除事件失敗:', error);
+                    alert('刪除事件失敗，請稍後再試。');
+                }
+            }
+        }
+
+        // 複製所有事件到剪貼簿，只複製Boss名和重生時間
+        window.copyAllEvents = function () {
+            const logContent = document.getElementById('eventLogContent');
+            let textToCopy = '';
+            const logItems = logContent.getElementsByClassName('log-item');
+
+            for (const item of logItems) {
+                const bossName = item.querySelector('.log-info').textContent.split(' | ')[0].trim();
+                const respawnText = item.querySelector('.log-content').textContent.replace('重生: ', '').trim();
+                textToCopy += `${bossName}\n重生: ${respawnText}\n\n`;
+            }
+
+            if (textToCopy) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    alert('已複製所有事件到剪貼簿');
+                }).catch(err => {
+                    console.error('複製失敗:', err);
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert('已複製所有事件到剪貼簿');
+                });
+            } else {
+                alert('沒有可複製的事件');
+            }
+        }
+
+        // 更新倒數計時器顯示
+        function updateEventLogTimer(docId, timeString) {
+            const logId = `log-${docId}`;
+            const logItem = document.getElementById(logId);
+            if (logItem) {
+                const timerSpan = logItem.querySelector('.timer');
+                if (timerSpan) {
+                    timerSpan.textContent = `${timeString}`;
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
