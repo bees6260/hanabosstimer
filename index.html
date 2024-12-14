@@ -368,7 +368,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-app.js";
-        import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, setDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore.js";
 
         // 在此填入您的 Firebase 設定
         const firebaseConfig = {
@@ -464,6 +464,11 @@
             return `${hours}:${minutes}:${seconds}`;
         }
 
+        // 轉換 Boss 名稱為安全的 Firestore 文檔 ID
+        function sanitizeBossName(bossName) {
+            return bossName.replace(/[^a-zA-Z0-9_-]/g, '_');
+        }
+
         // 初始化頁面
         window.onload = async function () {
             generateCards();
@@ -481,7 +486,7 @@
                     const bossIndex = bosses.findIndex(b => b.name === data.bossName);
                     if (bossIndex !== -1) {
                         const respawnTime = new Date(data.respawnTime);
-                        addToEventLog(data.bossName, respawnTime, docSnap.id);
+                        addToEventLog(bossIndex, respawnTime, docSnap.id);
                         startTimer(bossIndex, respawnTime, docSnap.id);
                     }
                 });
@@ -604,16 +609,18 @@
         async function updateBossTimer(bossIndex, killTime) {
             const boss = bosses[bossIndex];
             const respawnTime = new Date(killTime.getTime() + boss.respawnTime);
+            const sanitizedBossName = sanitizeBossName(boss.name);
 
             try {
-                const docRef = await addDoc(collection(db, 'bossEvents'), {
+                // 使用 setDoc 來覆蓋或創建文檔
+                await setDoc(doc(db, 'bossEvents', sanitizedBossName), {
                     bossName: boss.name,
                     killTime: killTime.toISOString(),
                     respawnTime: respawnTime.toISOString()
                 });
 
-                addToEventLog(boss.name, respawnTime, docRef.id);
-                startTimer(bossIndex, respawnTime, docRef.id);
+                addToEventLog(bossIndex, respawnTime, sanitizedBossName);
+                startTimer(bossIndex, respawnTime, sanitizedBossName);
             } catch (error) {
                 console.error("新增事件失敗:", error);
                 alert("新增事件失敗，請稍後再試。");
@@ -664,15 +671,18 @@
         // 根據已知的擊殺時間和重生時間更新Boss計時器
         async function updateBossTimerByRespawn(bossIndex, killTime, respawnTime) {
             const boss = bosses[bossIndex];
+            const sanitizedBossName = sanitizeBossName(boss.name);
+
             try {
-                const docRef = await addDoc(collection(db, 'bossEvents'), {
+                // 使用 setDoc 來覆蓋或創建文檔
+                await setDoc(doc(db, 'bossEvents', sanitizedBossName), {
                     bossName: boss.name,
                     killTime: killTime.toISOString(),
                     respawnTime: respawnTime.toISOString()
                 });
 
-                addToEventLog(boss.name, respawnTime, docRef.id);
-                startTimer(bossIndex, respawnTime, docRef.id);
+                addToEventLog(bossIndex, respawnTime, sanitizedBossName);
+                startTimer(bossIndex, respawnTime, sanitizedBossName);
             } catch (error) {
                 console.error("新增倒數事件失敗:", error);
                 alert("新增倒數事件失敗，請稍後再試。");
@@ -701,78 +711,89 @@
             }, 1000);
         }
 
-        // 添加事件到事件列表
-        function addToEventLog(bossName, respawnTime, docId) {
+        // 添加或更新事件到事件列表
+        function addToEventLog(bossIndex, respawnTime, docId) {
             const logDiv = document.getElementById('eventLogContent');
             const logId = `log-${docId}`; // 使用 docId 生成唯一的 logId
-            const logItem = document.createElement('div');
-            logItem.id = logId;
-            logItem.className = 'log-item';
-            logItem.setAttribute('data-doc-id', docId);
+            let logItem = document.getElementById(logId);
 
-            // 格式化重生時間
-            const formattedRespawn = formatRespawnTime(respawnTime);
+            // 如果事件已存在，更新內容
+            if (logItem) {
+                // 格式化重生時間
+                const formattedRespawn = formatRespawnTime(respawnTime);
+                // 更新倒數顯示
+                logItem.querySelector('.log-info .timer').textContent = "計算中...";
+                logItem.querySelector('.log-content').textContent = `重生: ${formattedRespawn}`;
+            } else {
+                // 創建新的事件項目
+                logItem = document.createElement('div');
+                logItem.id = logId;
+                logItem.className = 'log-item';
+                logItem.setAttribute('data-doc-id', docId);
 
-            // 設定倒數計時器的初始顯示
-            const initialCountdown = "計算中...";
+                // 格式化重生時間
+                const formattedRespawn = formatRespawnTime(respawnTime);
 
-            // 調整顯示格式：取消鍵在同一行，縮短「倒數:」與倒數時間的距離
-            logItem.innerHTML = `
-                <div class="log-header">
-                    <div class="log-info">
-                        ${bossName} | 倒數:<span class="timer">${initialCountdown}</span>
+                // 設定倒數計時器的初始顯示
+                const initialCountdown = "計算中...";
+
+                // 調整顯示格式：取消鍵在同一行，縮短「倒數:」與倒數時間的距離
+                logItem.innerHTML = `
+                    <div class="log-header">
+                        <div class="log-info">
+                            ${bosses[bossIndex].name} | 倒數:<span class="timer">${initialCountdown}</span>
+                        </div>
+                        <button class="cancel-btn" onclick="cancelEvent('${docId}')">取消</button>
                     </div>
-                    <button class="cancel-btn" onclick="cancelEvent('${logId}')">取消</button>
-                </div>
-                <div class="log-content">
-                    重生: ${formattedRespawn}
-                </div>
-            `;
+                    <div class="log-content">
+                        重生: ${formattedRespawn}
+                    </div>
+                `;
 
-            // 將新的事件插入到正確的位置以保持排序
-            let inserted = false;
-            const allLogs = Array.from(logDiv.children);
-            for (let i = 0; i < allLogs.length; i++) {
-                const existingRespawnText = allLogs[i].querySelector('.log-content')?.textContent || "";
-                const existingRespawnDateMatch = existingRespawnText.match(/重生: (\d{2})\/(\d{2}) (\S+) (\d{1,2}):(\d{2}):(\d{2})/);
-                if (existingRespawnDateMatch) {
-                    const month = parseInt(existingRespawnDateMatch[1], 10);
-                    const day = parseInt(existingRespawnDateMatch[2], 10);
-                    const period = existingRespawnDateMatch[3];
-                    let hours = parseInt(existingRespawnDateMatch[4], 10);
-                    const minutes = parseInt(existingRespawnDateMatch[5], 10);
-                    const seconds = parseInt(existingRespawnDateMatch[6], 10);
+                // 將新的事件插入到正確的位置以保持排序
+                let inserted = false;
+                const allLogs = Array.from(logDiv.children);
+                for (let i = 0; i < allLogs.length; i++) {
+                    const existingRespawnText = allLogs[i].querySelector('.log-content')?.textContent || "";
+                    const existingRespawnDateMatch = existingRespawnText.match(/重生: (\d{2})\/(\d{2}) (\S+) (\d{1,2}):(\d{2}):(\d{2})/);
+                    if (existingRespawnDateMatch) {
+                        const month = parseInt(existingRespawnDateMatch[1], 10);
+                        const day = parseInt(existingRespawnDateMatch[2], 10);
+                        const period = existingRespawnDateMatch[3];
+                        let hours = parseInt(existingRespawnDateMatch[4], 10);
+                        const minutes = parseInt(existingRespawnDateMatch[5], 10);
+                        const seconds = parseInt(existingRespawnDateMatch[6], 10);
 
-                    // 轉換為24小時制
-                    if (period === '下午' && hours !== 12) hours += 12;
-                    if (period === '上午' && hours === 12) hours = 0;
+                        // 轉換為24小時制
+                        if (period === '下午' && hours !== 12) hours += 12;
+                        if (period === '上午' && hours === 12) hours = 0;
 
-                    const existingRespawnDate = new Date();
-                    existingRespawnDate.setMonth(month - 1);
-                    existingRespawnDate.setDate(day);
-                    existingRespawnDate.setHours(hours);
-                    existingRespawnDate.setMinutes(minutes);
-                    existingRespawnDate.setSeconds(seconds);
-                    existingRespawnDate.setMilliseconds(0);
+                        const existingRespawnDate = new Date();
+                        existingRespawnDate.setMonth(month - 1);
+                        existingRespawnDate.setDate(day);
+                        existingRespawnDate.setHours(hours);
+                        existingRespawnDate.setMinutes(minutes);
+                        existingRespawnDate.setSeconds(seconds);
+                        existingRespawnDate.setMilliseconds(0);
 
-                    if (respawnTime < existingRespawnDate) {
-                        logDiv.insertBefore(logItem, allLogs[i]);
-                        inserted = true;
-                        break;
+                        if (respawnTime < existingRespawnDate) {
+                            logDiv.insertBefore(logItem, allLogs[i]);
+                            inserted = true;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if (!inserted) {
-                logDiv.appendChild(logItem);
+                if (!inserted) {
+                    logDiv.appendChild(logItem);
+                }
             }
         }
 
         // 取消事件
-        window.cancelEvent = async function (logId) {
-            const logItem = document.getElementById(logId);
+        window.cancelEvent = async function (docId) {
+            const logItem = document.getElementById(`log-${docId}`);
             if (logItem) {
-                const docId = logItem.getAttribute('data-doc-id');
                 try {
                     await deleteDoc(doc(db, 'bossEvents', docId));
                     logItem.remove();
