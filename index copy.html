@@ -224,6 +224,23 @@
             background: #45a049;
         }
 
+        .favorite-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            transition: transform 0.2s, color 0.2s;
+        }
+
+        .favorite-btn.favorited {
+            color: red;
+            transform: scale(1.2);
+        }
+
+        .favorite-btn:hover {
+            transform: scale(1.2);
+        }
+
         input[type="datetime-local"],
         input[type="number"] {
             padding: 8px;
@@ -310,6 +327,24 @@
             color: #ff4444;
             margin-top: 20px;
             font-size: 16px;
+        }
+
+        /* 按鈕樣式調整 */
+        #eventLogActions button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-bottom: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #eventLogActions button:hover {
+            background: #1976D2;
         }
     </style>
 </head>
@@ -398,6 +433,7 @@
             { category: "MVP", name: "1150 月夜貓", respawnTime: 3600000, imageUrl: "images/1150_MOONLIGHT.gif" },
             { category: "MVP", name: "1157 法老王", respawnTime: 3600000, imageUrl: "images/1157_PHARAOH.gif" },
             { category: "MVP", name: "1159 皮里恩", respawnTime: 3600000, imageUrl: "images/1159_PHREEONI.gif" },
+            { category: "MVP", name: "1181 殭屍龍", respawnTime: 3600000, imageUrl: "images/2131.gif" },
             { category: "MVP", name: "1190 獸人酋長", respawnTime: 3600000, imageUrl: "images/1190_ORC_LORD.gif" },
             { category: "MVP", name: "1251 冰暴騎士", respawnTime: 3600000, imageUrl: "images/1251_KNIGHT_OF_WINDSTORM.gif" },
             { category: "MVP", name: "1252 卡崙", respawnTime: 3600000, imageUrl: "images/1252_GARM.gif" },
@@ -473,6 +509,8 @@
             generateCards();
             await loadEventsFromFirebase();
             setupSearchFunctionality(); // 初始化搜尋功能
+            updateFavoriteButtons(); // 初始化「最愛」按鈕狀態
+            updateEventLogOrder(); // 根據最愛排序事件日誌
         };
 
         async function loadEventsFromFirebase() {
@@ -480,14 +518,27 @@
                 // 使用orderBy來排序重生時間
                 const q = query(collection(db, 'bossEvents'), orderBy('respawnTime', 'asc'));
                 const snapshot = await getDocs(q);
+                const events = [];
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
                     const bossIndex = bosses.findIndex(b => b.name === data.bossName);
                     if (bossIndex !== -1) {
                         const respawnTime = new Date(data.respawnTime);
-                        addToEventLog(bossIndex, respawnTime, docSnap.id);
-                        startTimer(bossIndex, respawnTime, docSnap.id);
+                        events.push({ bossIndex, respawnTime, docId: docSnap.id });
                     }
+                });
+                // 排序事件，最愛的 Boss 事件優先
+                events.sort((a, b) => {
+                    const aFavorite = isFavorite(sanitizeBossName(bosses[a.bossIndex].name));
+                    const bFavorite = isFavorite(sanitizeBossName(bosses[b.bossIndex].name));
+                    if (aFavorite && !bFavorite) return -1;
+                    if (!aFavorite && bFavorite) return 1;
+                    return a.respawnTime - b.respawnTime;
+                });
+                // 添加事件到日誌
+                events.forEach(event => {
+                    addToEventLog(event.bossIndex, event.respawnTime, event.docId);
+                    startTimer(event.bossIndex, event.respawnTime, event.docId);
                 });
             } catch (error) {
                 console.error("載入事件失敗:", error);
@@ -514,9 +565,18 @@
                             <button onclick="recordKill(${index})">記錄擊殺</button>
                             <button onclick="openTimeDialog(${index})">輸入擊殺時間</button>
                             <button onclick="openCountdownDialog(${index})">輸入倒數時間</button>
+                            <button onclick="toggleFavorite('${sanitizeBossName(boss.name)}')" class="favorite-btn" title="添加到最愛">
+                                ❤️
+                            </button>
                         </div>
                     </div>
                 `;
+
+                // 初始化「最愛」按鈕狀態
+                const favoriteBtn = card.querySelector('.favorite-btn');
+                if (isFavorite(sanitizeBossName(boss.name))) {
+                    favoriteBtn.classList.add('favorited');
+                }
 
                 if (boss.category === "MVP") {
                     mvpContainer.appendChild(card);
@@ -620,6 +680,7 @@
 
                 addToEventLog(bossIndex, respawnTime, sanitizedBossName);
                 startTimer(bossIndex, respawnTime, sanitizedBossName);
+                updateEventLogOrder(); // 重新排序事件日誌
             } catch (error) {
                 console.error("新增事件失敗:", error);
                 alert("新增事件失敗，請稍後再試。");
@@ -682,6 +743,7 @@
 
                 addToEventLog(bossIndex, respawnTime, sanitizedBossName);
                 startTimer(bossIndex, respawnTime, sanitizedBossName);
+                updateEventLogOrder(); // 重新排序事件日誌
             } catch (error) {
                 console.error("新增倒數事件失敗:", error);
                 alert("新增倒數事件失敗，請稍後再試。");
@@ -750,42 +812,7 @@
                 `;
 
                 // 將新的事件插入到正確的位置以保持排序
-                let inserted = false;
-                const allLogs = Array.from(logDiv.children);
-                for (let i = 0; i < allLogs.length; i++) {
-                    const existingRespawnText = allLogs[i].querySelector('.log-content')?.textContent || "";
-                    const existingRespawnDateMatch = existingRespawnText.match(/重生: (\d{2})\/(\d{2}) (\S+) (\d{1,2}):(\d{2}):(\d{2})/);
-                    if (existingRespawnDateMatch) {
-                        const month = parseInt(existingRespawnDateMatch[1], 10);
-                        const day = parseInt(existingRespawnDateMatch[2], 10);
-                        const period = existingRespawnDateMatch[3];
-                        let hours = parseInt(existingRespawnDateMatch[4], 10);
-                        const minutes = parseInt(existingRespawnDateMatch[5], 10);
-                        const seconds = parseInt(existingRespawnDateMatch[6], 10);
-
-                        // 轉換為24小時制
-                        if (period === '下午' && hours !== 12) hours += 12;
-                        if (period === '上午' && hours === 12) hours = 0;
-
-                        const existingRespawnDate = new Date();
-                        existingRespawnDate.setMonth(month - 1);
-                        existingRespawnDate.setDate(day);
-                        existingRespawnDate.setHours(hours);
-                        existingRespawnDate.setMinutes(minutes);
-                        existingRespawnDate.setSeconds(seconds);
-                        existingRespawnDate.setMilliseconds(0);
-
-                        if (respawnTime < existingRespawnDate) {
-                            logDiv.insertBefore(logItem, allLogs[i]);
-                            inserted = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!inserted) {
-                    logDiv.appendChild(logItem);
-                }
+                logDiv.appendChild(logItem);
             }
         }
 
@@ -849,6 +876,94 @@
                     timerSpan.textContent = `${timeString}`;
                 }
             }
+        }
+
+        // 檢查 Boss 是否在最愛列表中
+        function isFavorite(bossId) {
+            const favorites = getFavorites();
+            return favorites.includes(bossId);
+        }
+
+        // 獲取最愛列表
+        function getFavorites() {
+            const favorites = localStorage.getItem('favoriteBosses');
+            return favorites ? JSON.parse(favorites) : [];
+        }
+
+        // 設置最愛列表
+        function setFavorites(favorites) {
+            localStorage.setItem('favoriteBosses', JSON.stringify(favorites));
+        }
+
+        // 切換最愛狀態
+        function toggleFavorite(bossId) {
+            let favorites = getFavorites();
+            const index = favorites.indexOf(bossId);
+            if (index === -1) {
+                favorites.push(bossId);
+            } else {
+                favorites.splice(index, 1);
+            }
+            setFavorites(favorites);
+            updateFavoriteButtons();
+            updateEventLogOrder();
+        }
+
+        // 更新所有「最愛」按鈕的狀態
+        function updateFavoriteButtons() {
+            const favoriteButtons = document.querySelectorAll('.favorite-btn');
+            favoriteButtons.forEach(button => {
+                const card = button.closest('.card');
+                const bossName = card.querySelector('.card-header h3').textContent;
+                const bossId = sanitizeBossName(bossName);
+                if (isFavorite(bossId)) {
+                    button.classList.add('favorited');
+                } else {
+                    button.classList.remove('favorited');
+                }
+            });
+        }
+
+        // 更新事件日誌的排序，最愛 Boss 事件優先
+        function updateEventLogOrder() {
+            const logDiv = document.getElementById('eventLogContent');
+            const logItems = Array.from(logDiv.children);
+
+            // 分離最愛和非最愛事件
+            const favoriteEvents = [];
+            const otherEvents = [];
+
+            logItems.forEach(item => {
+                const docId = item.getAttribute('data-doc-id');
+                const bossName = item.querySelector('.log-info').textContent.split(' | ')[0].trim();
+                const bossId = sanitizeBossName(bossName);
+                if (isFavorite(bossId)) {
+                    favoriteEvents.push(item);
+                } else {
+                    otherEvents.push(item);
+                }
+            });
+
+            // 清空事件日誌
+            logDiv.innerHTML = '';
+
+            // 添加最愛事件，按重生時間排序
+            favoriteEvents.sort((a, b) => {
+                const respawnA = new Date(a.querySelector('.log-content').textContent.replace('重生: ', '').trim());
+                const respawnB = new Date(b.querySelector('.log-content').textContent.replace('重生: ', '').trim());
+                return respawnA - respawnB;
+            }).forEach(item => {
+                logDiv.appendChild(item);
+            });
+
+            // 添加其他事件，按重生時間排序
+            otherEvents.sort((a, b) => {
+                const respawnA = new Date(a.querySelector('.log-content').textContent.replace('重生: ', '').trim());
+                const respawnB = new Date(b.querySelector('.log-content').textContent.replace('重生: ', '').trim());
+                return respawnA - respawnB;
+            }).forEach(item => {
+                logDiv.appendChild(item);
+            });
         }
     </script>
 </body>
